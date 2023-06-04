@@ -7,17 +7,17 @@ import java.sql.*;
 import java.time.LocalDate;
 
 public class EmpruntServer implements Runnable{
-    // JDBC URL, username and password of MySQL server
+    // URL, nom d'utilisateur et mot de passe JDBC du serveur MySQL
     private static final String url = "jdbc:mysql://localhost:3306/mediatheque?zeroDateTimeBehavior=convertToNull";
     private static final String user = "root";
-    private static final String password = ""; // your database password here
+    private static final String password = "";
 
     @Override
     public void run() {
         try (ServerSocket serverSocket = new ServerSocket(1001)) {
             System.out.println("En attente de connexion client");
 
-            // getting database connection
+            // Obtenir la connexion à la base de données
             Class.forName("com.mysql.cj.jdbc.Driver");
             try(Connection con = DriverManager.getConnection(url, user, password)){
 
@@ -28,22 +28,22 @@ public class EmpruntServer implements Runnable{
                     DataInputStream in = new DataInputStream(clientSocket.getInputStream());
                     String inputData = in.readUTF();
 
-                    // Separate the subscriber ID and the DVD ID.
+                    // Séparer l'ID de l'abonné et l'ID du DVD.
                     String[] inputDataParts = inputData.split(";");
                     int abonneId = Integer.parseInt(inputDataParts[0]);
                     int dvdId = Integer.parseInt(inputDataParts[1]);
 
-                    // Check si la date de banissement et supérieur à la date d'aujourd'hui
+                    // Vérifier si la date de bannissement est supérieure à la date actuelle
                     PreparedStatement checkBanStatement = con.prepareStatement("SELECT bannedUntil FROM abonnes WHERE numero = ?");
                     checkBanStatement.setInt(1, abonneId);
                     ResultSet checkBanRs = checkBanStatement.executeQuery();
 
-                    // Check si le dvd est en réparation ou pas
+                    // Vérifier si le DVD est en réparation
                     PreparedStatement dvdReparation = con.prepareStatement("SELECT enReparation FROM dvds WHERE numero = ?");
                     dvdReparation.setInt(1, dvdId);
                     ResultSet dvdReparationRs = dvdReparation.executeQuery();
 
-                    // checking if DVD is already borrowed
+                    // Vérifier si le DVD est déjà emprunté
                     PreparedStatement ps = con.prepareStatement("SELECT empruntePar FROM dvds WHERE numero = ?");
                     ps.setInt(1, dvdId);
                     ResultSet rs = ps.executeQuery();
@@ -56,7 +56,7 @@ public class EmpruntServer implements Runnable{
                     if(rs.next()){
                         int empruntePar = rs.getInt("empruntePar");
                         if(empruntePar != 0){
-                            serverResponse = "DVD is already borrowed.";
+                            serverResponse = "Le DVD est déjà emprunté.";
                             isBorrowed = true;
                         }
                     }
@@ -78,21 +78,21 @@ public class EmpruntServer implements Runnable{
                     }
 
                     if(!isBorrowed && !isBanned && !isRepaired){
-                        // borrowing the DVD
+                        // Emprunter le DVD
                         PreparedStatement updatePs = con.prepareStatement("UPDATE dvds SET empruntePar = ?, reservePar = 0 WHERE numero = ?");
                         updatePs.setInt(1, abonneId);
                         updatePs.setInt(2, dvdId);
 
-                        // Update la date d'emprunt du dvd
+                        // Mettre à jour la date d'emprunt du DVD
                         PreparedStatement updateDateEmprunt = con.prepareStatement("UPDATE dvds SET dateEmprunt = ? WHERE numero = ?");
                         Date currentDate = Date.valueOf(LocalDate.now());
                         updateDateEmprunt.setDate(1, currentDate);
                         updateDateEmprunt.setInt(2, dvdId);
 
-                        // Ajout de la date excepté (2 semaines)
+                        // Ajouter la date d'échéance (2 semaines)
                         PreparedStatement insertDateExcepte = con.prepareStatement("UPDATE dvds SET dateRenduExcepte = ? WHERE numero = ?");
                         LocalDate datePlusTwoWeeks = LocalDate.now().plusWeeks(2);
-                        Date sqlDatePlusTwoWeeks = Date.valueOf(datePlusTwoWeeks); // Conversion de la date en javasql Date
+                        Date sqlDatePlusTwoWeeks = Date.valueOf(datePlusTwoWeeks); // Conversion de la date en java.sql.Date
                         insertDateExcepte.setDate(1, sqlDatePlusTwoWeeks);
                         insertDateExcepte.setInt(2, dvdId);
 
@@ -101,10 +101,10 @@ public class EmpruntServer implements Runnable{
                         int rowsAffectedDateRenduExcepte = insertDateExcepte.executeUpdate();
 
                         if(rowsAffected > 0 && rowsAffectedDate > 0 && rowsAffectedDateRenduExcepte > 0){
-                            serverResponse = "Borrowing successful. Vous devrez le rendre pour : " + datePlusTwoWeeks;
+                            serverResponse = "Emprunt réussi. Vous devrez le rendre pour : " + datePlusTwoWeeks;
                         }
                         else{
-                            serverResponse = "Borrowing failed.";
+                            serverResponse = "Échec de l'emprunt.";
                         }
                     }
 

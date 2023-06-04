@@ -25,5 +25,4 @@ public class Abonne {
         return dateNaissance;
     }
 
-    // Add setters if necessary
 }

@@ -3,10 +3,12 @@ package server;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.security.NoSuchAlgorithmException;
 import java.sql.*;
 import java.time.*;
 import java.util.concurrent.*;
 import javax.sound.sampled.*;
+import java.security.MessageDigest;
 
 public class ReservationServer implements Runnable {
     // JDBC URL, username and password of MySQL server
@@ -29,7 +31,7 @@ public class ReservationServer implements Runnable {
         executorService.execute(() -> {
             try {
                 // Assuming the file is in the project root.
-                File musicPath = new File("C:\\Users\\vanic\\Desktop\\Mediatheque-DVD-main\\Mediatheque_Server\\server\\server\\attente.wav");
+                File musicPath = new File(System.getProperty("user.dir") + "/server/server/attente.wav");
 
                 if (musicPath.exists()) {
                     AudioInputStream audioInput = AudioSystem.getAudioInputStream(musicPath);
@@ -88,40 +90,37 @@ public class ReservationServer implements Runnable {
         DataInputStream in = new DataInputStream(clientSocket.getInputStream());
         String inputData = in.readUTF();
 
-        // Separate the subscriber ID and the DVD ID.
         String[] inputDataParts = inputData.split(";");
         int abonneId = Integer.parseInt(inputDataParts[0]);
         int dvdId = Integer.parseInt(inputDataParts[1]);
 
-        // checking if DVD is already reserved
         PreparedStatement ps = con.prepareStatement("SELECT reservePar, reservationTime FROM dvds WHERE numero = ?");
         ps.setInt(1, dvdId);
         ResultSet rs = ps.executeQuery();
 
-        // Check si la date de banissement et supérieur à la date d'aujourd'hui
         PreparedStatement checkBanStatement = con.prepareStatement("SELECT bannedUntil FROM abonnes WHERE numero = ?");
         checkBanStatement.setInt(1, abonneId);
         ResultSet checkBanRs = checkBanStatement.executeQuery();
 
-        // Check si le dvd est en réparation ou pas
         PreparedStatement dvdReparation = con.prepareStatement("SELECT enReparation FROM dvds WHERE numero = ?");
         dvdReparation.setInt(1, dvdId);
         ResultSet dvdReparationRs = dvdReparation.executeQuery();
 
+        PreparedStatement checkPs = con.prepareStatement("SELECT empruntePar FROM dvds WHERE numero = ?");
+        checkPs.setInt(1, dvdId);
+        ResultSet checkRs = checkPs.executeQuery();
 
 
-
-
+        DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
 
         String serverResponse = "";
         String serverResponseBanDate = "";
         boolean isBanned = false;
         boolean isRepaired = false;
-        DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
-
+        boolean isBorrowed = false;
+        boolean wantAlert = false;
 
         if(checkBanRs.next()) {
-            // Date de banissement de l'abonné
             Date banDate = checkBanRs.getDate("bannedUntil");
             if(banDate != null && banDate.toLocalDate().isAfter(LocalDate.now())) {
                 serverResponseBanDate = "Vous êtes banni jusqu'à " + banDate + ", vous ne pouvez pas réserver de DVD.";
@@ -136,8 +135,29 @@ public class ReservationServer implements Runnable {
             }
         }
 
+        if (checkRs.next() && checkRs.getInt("empruntePar") != 0) {
+            isBorrowed = true;
+            System.out.println("Malheureusement, le DVD a été emprunté. Vous avez quand même pu recevoir ce concert celeste gratuitement !");
+            out.writeUTF("Voulez-vous être alerté quand il sera disponible ? Répondez par votre email pour Oui, N pour Non.");
+            DataInputStream alerteResponse = new DataInputStream(clientSocket.getInputStream());
+            String isAlerted = alerteResponse.readUTF();
 
-        if (rs.next() && !isBanned && !isRepaired) {
+
+            if (!"N".equalsIgnoreCase(isAlerted)) {
+                PreparedStatement psUpdate = con.prepareStatement("UPDATE dvds SET EnAttente = ? WHERE numero = ?");
+                psUpdate.setString(1, isAlerted); // Pour l'instant on ne met pas hashedEmail car on arrive pas à déhasher le sha1 car normalement ce n'est pas possible ou très compliqué
+                psUpdate.setInt(2, dvdId);
+                psUpdate.executeUpdate();
+                serverResponse = "Vous allez être alerté";
+                wantAlert = true;
+
+            } else {
+                serverResponse = "Désolé vous ne serez pas alerté";
+            }
+        }
+
+
+        if (rs.next() && !isBanned && !isRepaired && !isBorrowed) {
             int reservePar = rs.getInt("reservePar");
             LocalDateTime reservationTime = rs.getTimestamp("reservationTime").toLocalDateTime();
 
@@ -217,15 +237,18 @@ public class ReservationServer implements Runnable {
             } else {
                 serverResponse = "Le DVD est actuellement réservé. Veuillez réessayer plus tard.";
             }
-        } else if (isBanned == true){
+        } else if (isBanned == true) {
             serverResponse = serverResponseBanDate;
-        }else if (isRepaired == true){
-            serverResponse = "Le dvd "+dvdId+" est en réparation" ;
+        } else if (isRepaired == true) {
+            serverResponse = "Le dvd " + dvdId + " est en réparation";
+        } else if (isBorrowed == true && wantAlert == true) {
+            serverResponse = "Le dvd " + dvdId + " est déjà emprunté mais vous serez alerté par email lors de sa disponibilité";
+        } else if (isBorrowed == true && wantAlert != true) {
+            serverResponse = "Le dvd " + dvdId + " est déjà emprunté";
         } else {
             serverResponse = "DVD non trouvé.";
         }
-
         out.writeUTF(serverResponse);
     }
-
 }
+

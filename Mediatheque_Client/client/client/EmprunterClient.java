@@ -2,35 +2,31 @@ package client;
 
 import java.io.*;
 import java.net.Socket;
-import java.net.UnknownHostException;
 import java.util.Scanner;
 
-public class EmprunterClient implements Runnable{
+public class EmprunterClient implements Runnable {
+
     public void run() {
         try {
+            // Établir une connexion avec le serveur sur localhost et le port 1001
             Socket socket = new Socket("localhost", 1001);
 
-            // Get the subscriber ID and DVD ID from the user.
+            // Obtenir l'ID de l'abonné et l'ID du DVD de l'utilisateur
             Scanner sc = new Scanner(System.in);
             System.out.println("Numéro de l'abonné pour l'emprunt : ");
             String numeroAbonne = sc.next();
             System.out.println("Numéro du DVD pour l'emprunt : ");
             String numeroDVD = sc.next();
 
-            // Send the subscriber ID and DVD ID to the server.
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
             out.writeUTF(numeroAbonne + ";" + numeroDVD);
 
-            // Get the response from the server.
             DataInputStream in = new DataInputStream(socket.getInputStream());
             String serverResponse = in.readUTF();
 
-            //Donner la date de rendu excepté
-            //System.out.println("Vous devez rendre le dvd pour : " +);
-
-            // Print the server response.
             System.out.println(serverResponse);
 
+            // Fermer la connexion avec le serveur
             socket.close();
         } catch (Exception e) {
             e.printStackTrace();

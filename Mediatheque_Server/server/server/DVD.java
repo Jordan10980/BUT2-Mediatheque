@@ -1,10 +1,10 @@
 package server;
 
-import javax.sound.sampled.*;
-import java.io.File;
-import java.io.IOException;
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+        import javax.sound.sampled.*;
+        import java.io.File;
+        import java.io.IOException;
+        import java.time.LocalDateTime;
+        import java.time.temporal.ChronoUnit;
 
 public class DVD implements Document {
     private int numero;
@@ -71,26 +71,27 @@ public class DVD implements Document {
             DataLine.Info info = new DataLine.Info(Clip.class, format);
             Clip clip = (Clip) AudioSystem.getLine(info);
             clip.open(stream);
-            System.out.println("Starting music playback..."); // This line
+            System.out.println("Lecture de la musique en attente..."); // Cette ligne
             clip.start();
 
-            while (clip.isRunning()) { // This loop
-                Thread.sleep(100); // Sleep a while
+            while (clip.isRunning()) { // Boucle
+                Thread.sleep(100); // Pause
             }
 
-            System.out.println("Music playback ended."); // And this line
+            System.out.println("Fin de la lecture de la musique."); // Et cette ligne
         } catch (UnsupportedAudioFileException e) {
-            System.err.println("The specified audio file is not supported.");
+            System.err.println("Le fichier audio spécifié n'est pas pris en charge.");
             e.printStackTrace();
         } catch (IOException e) {
-            System.err.println("Error opening the audio file.");
+            System.err.println("Erreur lors de l'ouverture du fichier audio.");
             e.printStackTrace();
         } catch (LineUnavailableException e) {
-            System.err.println("Audio line for playing the file is unavailable.");
+            System.err.println("Ligne audio indisponible pour la lecture du fichier.");
             e.printStackTrace();
         } catch (InterruptedException e) {
-            System.err.println("Sleep interrupted");
+            System.err.println("Interruption de l'audio.");
             e.printStackTrace();
         }
     }
 }
+
